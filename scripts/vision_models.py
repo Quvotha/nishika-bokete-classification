@@ -1,35 +1,39 @@
 from typing import Literal, Tuple
 
+import torch
 import torchvision.models
 
 
+VisionModelNames = Literal[
+    "efficientnet_b0",
+    "efficientnet_b1",
+    "efficientnet_b2",
+    "resnet18",
+    "resnet34",
+    "vgg16",
+    "vgg16_bn",
+]
+
+
 def get_model_and_transforms(
-    model_name: Literal[
-        "efficientnet_b0",
-        "efficientnet_b1",
-        "efficientnet_b2",
-        "resnet18",
-        "resnet34",
-        "vgg16",
-        "vgg16_bn",
-    ]
+    model_name: VisionModelNames,
 ) -> Tuple[object, object]:
     """訓練済みの画像分類モデルと、モデルに対応した画像の前処理関数を取得する。
 
     Parameters
     ----------
-    model_name : Literal[efficientnet_b0;efficientnet_b1;efficientnet_b2;resnet18;resnet34;vgg16;vgg16_bn]
-        画像分類モデルの名称。
+    model_name : VisionModelNames
+        モデル名称。
 
     Returns
     -------
     model, transforms: Tuple[object, object]
-        画像分類モデル、モデルに対応した画像の前処理関数。
+        画像分類モデル、画像の前処理関数。
 
     Raises
     ------
     ValueError
-        `model_name` に不適切な値を指定した場合。
+        `model_name` に不適切なモデル名を指定した場合。
     """
     if model_name == "efficientnet_b0":
         weights = torchvision.models.EfficientNet_B0_Weights.IMAGENET1K_V1
@@ -57,6 +61,24 @@ def get_model_and_transforms(
     return model, weights.transforms
 
 
+class VisionModel(torch.nn.Module):
+    def __init__(self, model_name: VisionModelNames):
+        super().__init__()
+        model, _ = get_model_and_transforms(model_name)
+        self.backborn = model
+        self.activation = torch.nn.ReLU()
+        self.output = torch.nn.Linear(1000, 2)
+
+    def extract_features(self, x: torch.Tensor):
+        return self.backborn(x)
+
+    def forward(self, x: torch.Tensor):
+        x = self.extract_features(x)
+        x = self.activation(x)
+        x = self.output(x)
+        return x
+
+
 if __name__ == "__main__":
     for model_name in (
         "efficientnet_b0",
@@ -72,3 +94,14 @@ if __name__ == "__main__":
         get_model_and_transforms("hogehoge")
     except ValueError:
         pass
+
+    for model_name in (
+        "efficientnet_b0",
+        "efficientnet_b1",
+        "efficientnet_b2",
+        "resnet18",
+        "resnet34",
+        "vgg16",
+        "vgg16_bn",
+    ):
+        model = VisionModel(model_name)
