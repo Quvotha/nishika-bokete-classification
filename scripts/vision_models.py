@@ -64,12 +64,14 @@ def get_model_and_transforms(
 class VisionModel(torch.nn.Module):
     def __init__(self, model_name: VisionModelNames):
         super().__init__()
-        model, _ = get_model_and_transforms(model_name)
+        model, transforms = get_model_and_transforms(model_name)
+        self.transforms = transforms()
         self.backborn = model
         self.activation = torch.nn.ReLU()
         self.output = torch.nn.Linear(1000, 2)
 
     def extract_features(self, x: torch.Tensor):
+        x = self.transforms(x)
         return self.backborn(x)
 
     def forward(self, x: torch.Tensor):
