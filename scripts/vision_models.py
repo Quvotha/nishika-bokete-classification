@@ -70,8 +70,16 @@ class VisionModel(torch.nn.Module):
         self.activation = torch.nn.ReLU()
         self.output = torch.nn.Linear(1000, 2)
 
-    def extract_features(self, x: torch.Tensor):
-        x = self.transforms(x)
+    def preprocess(self, x: torch.Tensor):
+        if not 3 <= x.ndim <= 4:
+            raise ValueError("`x` should be 3 or 4 dimensional torch.Tensor")
+        elif x.ndim == 3:
+            x = x.unsqueeze(0)
+        return self.transforms(x)
+
+    def extract_features(self, x: torch.Tensor, preprocess: bool = True):
+        if preprocess:
+            x = self.preprocess(x)
         return self.backborn(x)
 
     def forward(self, x: torch.Tensor):
@@ -107,3 +115,9 @@ if __name__ == "__main__":
         "vgg16_bn",
     ):
         model = VisionModel(model_name)
+
+    image = torch.Tensor(size=(3, 224, 224))
+    model.preprocess(image)
+    model.preprocess(image.unsqueeze(0))
+    model.extract_features(image)
+    model(image)
