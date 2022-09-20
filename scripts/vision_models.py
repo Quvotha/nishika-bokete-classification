@@ -4,7 +4,7 @@ import torch
 import torchvision.models
 
 
-VisionModelNames = Literal[
+VisionModelName = Literal[
     "efficientnet_b0",
     "efficientnet_b1",
     "efficientnet_b2",
@@ -16,7 +16,7 @@ VisionModelNames = Literal[
 
 
 def get_model_and_transforms(
-    model_name: VisionModelNames,
+    model_name: VisionModelName,
 ) -> Tuple[object, object]:
     """訓練済みの画像分類モデルと、モデルに対応した画像の前処理関数を取得する。
 
@@ -61,32 +61,33 @@ def get_model_and_transforms(
     return model, weights.transforms
 
 
-class VisionModel(torch.nn.Module):
-    def __init__(self, model_name: VisionModelNames):
+class VisionVectorizer(torch.nn.Module):
+    def __init__(self, model_name: VisionModelName):
         super().__init__()
         model, transforms = get_model_and_transforms(model_name)
         self.transforms = transforms()
         self.backborn = model
+
+    def forward(self, image_tensor: torch.Tensor) -> torch.Tensor:
+        ndim = image_tensor.ndim
+        if not 3 <= ndim <= 4:
+            raise ValueError("`image_tensor` should be 3 or 4 dimensional torch.Tensor")
+        elif ndim == 3:
+            image_tensor = image_tensor.unsqueeze(0)
+        return self.backborn(self.transforms(image_tensor))
+
+
+class VisionClassifier(torch.nn.Module):
+    def __init__(self, model_name: VisionModelName, n_classes: int = 2):
+        super().__init__()
+        self.vectorizer = VisionVectorizer(model_name)
         self.activation = torch.nn.ReLU()
-        self.output = torch.nn.Linear(1000, 2)
+        self.classifier = torch.nn.Linear(1000, n_classes)
+        self.n_classes = n_classes
 
-    def preprocess(self, x: torch.Tensor):
-        if not 3 <= x.ndim <= 4:
-            raise ValueError("`x` should be 3 or 4 dimensional torch.Tensor")
-        elif x.ndim == 3:
-            x = x.unsqueeze(0)
-        return self.transforms(x)
-
-    def extract_features(self, x: torch.Tensor, preprocess: bool = True):
-        if preprocess:
-            x = self.preprocess(x)
-        return self.backborn(x)
-
-    def forward(self, x: torch.Tensor):
-        x = self.extract_features(x)
-        x = self.activation(x)
-        x = self.output(x)
-        return x
+    def forward(self, image_tensor: torch.Tensor) -> torch.Tensor:
+        vector = self.vectorizer(image_tensor)
+        return self.classifier(self.activation(vector))
 
 
 if __name__ == "__main__":
@@ -114,10 +115,6 @@ if __name__ == "__main__":
         "vgg16",
         "vgg16_bn",
     ):
-        model = VisionModel(model_name)
-
-    image = torch.Tensor(size=(3, 224, 224))
-    model.preprocess(image)
-    model.preprocess(image.unsqueeze(0))
-    model.extract_features(image)
-    model(image)
+        model = VisionClassifier(model_name)
+        image = torch.Tensor(size=(3, 224, 224))
+        model(image)
