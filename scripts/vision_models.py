@@ -22,7 +22,7 @@ def get_model_and_transforms(
 
     Parameters
     ----------
-    model_name : VisionModelNames
+    model_name : VisionModelName
         モデル名称。
 
     Returns
