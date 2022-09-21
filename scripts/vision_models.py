@@ -76,6 +76,10 @@ class VisionVectorizer(torch.nn.Module):
             image_tensor = image_tensor.unsqueeze(0)
         return self.backborn(self.transforms(image_tensor))
 
+    @property
+    def ndim(self) -> int:
+        return 1000
+
 
 class VisionClassifier(torch.nn.Module):
     def __init__(self, model_name: VisionModelName, n_classes: int = 2):
