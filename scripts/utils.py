@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from scripts.image import read_jpg
+from scripts.images import read_jpg
 
 
 class NishikaBoketeDataset(torch.utils.data.Dataset):
