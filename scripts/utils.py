@@ -1,5 +1,7 @@
 import os
+import random
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -24,3 +26,13 @@ class NishikaBoketeDataset(torch.utils.data.Dataset):
         text = self.texts[i]
         label = None if self.labels is None else self.labels[i]
         return id_, image, text, label
+
+
+def set_seeds(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
