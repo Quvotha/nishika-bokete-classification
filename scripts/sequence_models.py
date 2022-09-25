@@ -76,7 +76,9 @@ class SequenceClassifier(torch.nn.Module):
         super(SequenceClassifier, self).__init__()
         self.vectorizer = SequenceVectorizer(model_name)
         self.activation = torch.nn.ReLU()
-        self.classifier = torch.nn.Linear(self.vectorizer.ndim, n_classes)
+        self.classifier = torch.nn.Linear(
+            self.vectorizer.ndim, 1 if n_classes == 2 else n_classes
+        )
         self.model_name = model_name
         self.n_classes = n_classes
 

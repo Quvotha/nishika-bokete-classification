@@ -23,7 +23,7 @@ class BoketeClassifier(torch.nn.Module):
         # 最終層
         self.activation = torch.nn.ReLU()
         ndim = self.image_vectorizer.ndim + self.sequence_vectorizer.ndim
-        self.classifier = torch.nn.Linear(ndim, n_classes)
+        self.classifier = torch.nn.Linear(ndim, 1 if n_classes == 2 else n_classes)
         # その他
         self.image_model_name = image_model_name
         self.sequence_model_name = sequence_model_name

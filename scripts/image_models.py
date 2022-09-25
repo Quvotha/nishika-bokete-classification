@@ -90,7 +90,7 @@ class ImageClassifier(torch.nn.Module):
         super(ImageClassifier, self).__init__()
         self.vectorizer = ImageVectorizer(model_name)
         self.activation = torch.nn.ReLU()
-        self.classifier = torch.nn.Linear(1000, n_classes)
+        self.classifier = torch.nn.Linear(1000, 1 if n_classes == 2 else n_classes)
         self.n_classes = n_classes
 
     def forward(self, image_tensor: torch.Tensor) -> torch.Tensor:
