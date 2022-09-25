@@ -131,3 +131,4 @@ dmypy.json
 # Quvotha added
 log/
 data/
+models/
