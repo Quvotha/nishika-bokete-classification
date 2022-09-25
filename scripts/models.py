@@ -21,12 +21,12 @@ class BoketeClassifier(torch.nn.Module):
         sequence_classifier = SequenceClassifier(sequence_model_name)
         self.sequence_vectorizer = sequence_classifier.vectorizer
         # 最終層
+        ndim = self.image_vectorizer.ndim + self.sequence_vectorizer.ndim
         self.output = torch.nn.Sequential(
             torch.nn.ReLU(),
-            torch.nn.Linear(
-                self.image_vectorizer.ndim + self.sequence_vectorizer.ndim,
-                1 if n_classes == 2 else n_classes,
-            ),
+            torch.nn.Linear(ndim, ndim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(ndim, 1 if n_classes == 2 else n_classes),
         )
         # その他
         self.image_model_name = image_model_name
