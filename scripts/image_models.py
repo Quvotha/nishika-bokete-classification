@@ -65,7 +65,7 @@ class ImageVectorizer(torch.nn.Module):
     def __init__(self, model_name: ImageModelName):
         super(ImageVectorizer, self).__init__()
         model, transforms = get_model_and_transforms(model_name)
-        self.transforms = transforms()
+        self._transforms = transforms
         self.backborn = model
 
     def forward(self, image_tensor: torch.Tensor) -> torch.Tensor:
@@ -74,11 +74,15 @@ class ImageVectorizer(torch.nn.Module):
             raise ValueError("`image_tensor` should be 3 or 4 dimensional torch.Tensor")
         elif ndim == 3:
             image_tensor = image_tensor.unsqueeze(0)
-        return self.backborn(self.transforms(image_tensor))
+        return self.backborn(image_tensor)
 
     @property
     def ndim(self) -> int:
         return 1000
+
+    @property
+    def transforms(self):
+        return self._transforms()
 
 
 class ImageClassifier(torch.nn.Module):
@@ -92,6 +96,10 @@ class ImageClassifier(torch.nn.Module):
     def forward(self, image_tensor: torch.Tensor) -> torch.Tensor:
         vector = self.vectorizer(image_tensor)
         return self.classifier(self.activation(vector))
+
+    @property
+    def transforms(self):
+        return self.vectorizer.transforms
 
 
 if __name__ == "__main__":
