@@ -1,4 +1,4 @@
-from typing import Literal, Tuple
+from typing import Iterable, Literal, Tuple
 
 import torch
 import torchvision.models
@@ -76,6 +76,9 @@ class ImageVectorizer(torch.nn.Module):
             image_tensor = image_tensor.unsqueeze(0)
         return self.backborn(image_tensor)
 
+    def preprocess(self, image_tensors: Iterable[torch.Tensor]) -> torch.Tensor:
+        return torch.stack([self.transforms(image) for image in image_tensors])
+
     @property
     def ndim(self) -> int:
         return 1000
@@ -100,6 +103,10 @@ class ImageClassifier(torch.nn.Module):
     @property
     def transforms(self):
         return self.vectorizer.transforms
+
+    @property
+    def preprocess(self):
+        return self.vectorizer.preprocess
 
 
 if __name__ == "__main__":
@@ -128,5 +135,6 @@ if __name__ == "__main__":
         "vgg16_bn",
     ):
         model = ImageClassifier(model_name)
-        image = torch.Tensor(size=(3, 224, 224))
-        model(image)
+        image = torch.Tensor(size=(5, 3, 400, 623))
+        image_preprocessed = model.preprocess(image)
+        model(image_preprocessed)

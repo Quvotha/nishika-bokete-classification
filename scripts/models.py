@@ -1,3 +1,5 @@
+from typing import Iterable, Tuple
+
 import torch
 
 from sequence_models import SequenceClassifier, SequenceModelName
@@ -38,6 +40,13 @@ class BoketeClassifier(torch.nn.Module):
         vector = torch.cat([image_vector, sequence_vector], dim=1)
         return self.output(vector)
 
+    def preprocess(
+        self, image_tensors: Iterable[torch.Tensor], texts: Iterable[str]
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        images_preprocessed = self.image_vectorizer.preprocess(image_tensors)
+        tokenized = self.sequence_vectorizer.preprocess(texts)
+        return images_preprocessed, tokenized
+
     @property
     def transforms(self):
         return self.image_vectorizer.transforms
@@ -49,7 +58,7 @@ class BoketeClassifier(torch.nn.Module):
 
 if __name__ == "__main__":
     texts = ["Nishikaボケて", "いろはにほへとちりぬるを", "仰げば尊し", "ゴンザレス井上"]
-    image_tensor = torch.Tensor(size=(len(texts), 3, 224, 224))
+    image_tensors = torch.Tensor(size=(len(texts), 3, 224, 224))
 
     image_model_names = (
         "efficientnet_b0",
@@ -68,8 +77,5 @@ if __name__ == "__main__":
     for image_model_name in image_model_names:
         for sequence_model_name in sequence_model_names:
             model = BoketeClassifier(image_model_name, sequence_model_name)
-            images_transformed = torch.stack(
-                [model.transforms(image) for image in image_tensor]
-            )
-            tokenized = model.tokenizer(texts, return_tensors="pt", padding=True)
+            images_transformed, tokenized = model.preprocess(image_tensors, texts)
             model(images_transformed, tokenized)

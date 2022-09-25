@@ -1,4 +1,4 @@
-from typing import Literal, Tuple
+from typing import Iterable, Literal, Tuple
 
 from transformers import BertModel, GPT2Model, RobertaModel
 from transformers import AutoTokenizer, T5Tokenizer
@@ -46,6 +46,7 @@ def get_model_and_tokenizer(model_name: SequenceModelName) -> Tuple[object, obje
 
 
 class SequenceVectorizer(torch.nn.Module):
+    # Refference:
     # https://www.guruguru.science/competitions/16/discussions/fb792c87-6bad-445d-aa34-b4118fc378c1/
 
     def __init__(self, model_name: SequenceModelName):
@@ -59,6 +60,9 @@ class SequenceVectorizer(torch.nn.Module):
         # tokenized_sequence = self.tokenizer(sequence, return_tensors="pt", padding=True)
         outputs = self.backbone(**tokenized)
         return outputs["last_hidden_state"][:, 0, :]
+
+    def preprocess(self, texts: Iterable[str]) -> torch.Tensor:
+        return self.tokenizer(texts, return_tensors="pt", padding=True)
 
     @property
     def ndim(self) -> int:
@@ -94,6 +98,10 @@ class SequenceClassifier(torch.nn.Module):
     def tokenizer(self):
         return self.vectorizer.tokenizer
 
+    @property
+    def preprocess(self):
+        return self.vectorizer.preprocess
+
 
 if __name__ == "__main__":
     texts = ["Nishika コンペティション", "Noshika bokete", "Nishika Sさん"]
@@ -103,10 +111,10 @@ if __name__ == "__main__":
         "cl-tohoku/bert-base-japanese-v2",
     ]:
         vectorizer = SequenceVectorizer(m)
-        tokenized = vectorizer.tokenizer(texts, return_tensors="pt", padding=True)
+        tokenized = vectorizer.preprocess(texts)
         vector = vectorizer(tokenized)
         assert vector.shape[-1] == vectorizer.ndim, (vector.shape, vectorizer.ndim)
 
         classifier = SequenceClassifier(m)
-        tokenized = classifier.tokenizer(texts, return_tensors="pt", padding=True)
+        tokenized = classifier.preprocess(texts)
         prediction = classifier(tokenized)
