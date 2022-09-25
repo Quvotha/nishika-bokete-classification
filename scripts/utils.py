@@ -1,6 +1,6 @@
 import os
 import random
-from typing import Tuple, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,11 @@ from scripts.images import read_jpg
 
 # id, image tensor, text, label if training set otherwise None
 NishikaDataType = Tuple[str, torch.Tensor, str, Union[int, None]]
+
+# list of id, list of image tensor, list of text, list of label if training set otherwise None
+NishikaBoketeBatch = Tuple[
+    List[str], List[torch.Tensor], List[str], Union[List[int], None]
+]
 
 
 class NishikaBoketeDataset(torch.utils.data.Dataset):
@@ -42,5 +47,18 @@ def set_seeds(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-def collate_fn(batch):
-    raise NotImplemented
+def collate_fn(batch: List[NishikaDataType]) -> NishikaBoketeBatch:
+    ids = []
+    image_tensors = []
+    texts = []
+    labels = []
+    for id_, image_tensor, text, label_or_None in batch:
+        ids.append(id_)
+        image_tensors.append(image_tensor)
+        texts.append(text)
+        if label_or_None is not None:
+            labels.append(label_or_None)
+    if labels:
+        return ids, image_tensors, texts, labels
+    else:
+        return ids, image_tensors, texts, None
