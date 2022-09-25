@@ -1,5 +1,3 @@
-from typing import Sequence
-
 import torch
 
 from sequence_models import SequenceClassifier, SequenceModelName
@@ -33,14 +31,20 @@ class BoketeClassifier(torch.nn.Module):
         self.sequence_model_name = sequence_model_name
         self.n_classes = n_classes
 
-    def forward(
-        self, image_tensor: torch.Tensor, sequences: Sequence[str]
-    ) -> torch.Tensor:
+    def forward(self, image_tensor: torch.Tensor, tokenized) -> torch.Tensor:
         image_vector = self.image_vectorizer(image_tensor)
-        sequence_vector = self.sequence_vectorizer(sequences)
+        sequence_vector = self.sequence_vectorizer(tokenized)
         assert image_vector.shape[0] == sequence_vector.shape[0]
         vector = torch.cat([image_vector, sequence_vector], dim=1)
         return self.output(vector)
+
+    @property
+    def transforms(self):
+        return self.image_vectorizer.transforms
+
+    @property
+    def tokenizer(self):
+        return self.sequence_vectorizer.tokenizer
 
 
 if __name__ == "__main__":
@@ -63,5 +67,9 @@ if __name__ == "__main__":
     )
     for image_model_name in image_model_names:
         for sequence_model_name in sequence_model_names:
-            classifier = BoketeClassifier(image_model_name, sequence_model_name)
-            classifier(image_tensor=image_tensor, sequences=texts)
+            model = BoketeClassifier(image_model_name, sequence_model_name)
+            images_transformed = torch.stack(
+                [model.transforms(image) for image in image_tensor]
+            )
+            tokenized = model.tokenizer(texts, return_tensors="pt", padding=True)
+            model(images_transformed, tokenized)
