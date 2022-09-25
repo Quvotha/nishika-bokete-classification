@@ -21,9 +21,13 @@ class BoketeClassifier(torch.nn.Module):
         sequence_classifier = SequenceClassifier(sequence_model_name)
         self.sequence_vectorizer = sequence_classifier.vectorizer
         # 最終層
-        self.activation = torch.nn.ReLU()
-        ndim = self.image_vectorizer.ndim + self.sequence_vectorizer.ndim
-        self.classifier = torch.nn.Linear(ndim, 1 if n_classes == 2 else n_classes)
+        self.output = torch.nn.Sequential(
+            torch.nn.ReLU(),
+            torch.nn.Linear(
+                self.image_vectorizer.ndim + self.sequence_vectorizer.ndim,
+                1 if n_classes == 2 else n_classes,
+            ),
+        )
         # その他
         self.image_model_name = image_model_name
         self.sequence_model_name = sequence_model_name
@@ -36,7 +40,7 @@ class BoketeClassifier(torch.nn.Module):
         sequence_vector = self.sequence_vectorizer(sequences)
         assert image_vector.shape[0] == sequence_vector.shape[0]
         vector = torch.cat([image_vector, sequence_vector], dim=1)
-        return self.classifier(self.activation(vector))
+        return self.output(vector)
 
 
 if __name__ == "__main__":
