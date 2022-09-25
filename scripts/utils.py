@@ -9,7 +9,7 @@ import torch
 from scripts.images import read_jpg
 
 # id, image tensor, text, label if training set otherwise None
-NishikaDataType = Tuple[str, torch.Tensor, str, Union[int, None]]
+NishikaBoketeData = Tuple[str, torch.Tensor, str, Union[int, None]]
 
 # list of id, list of image tensor, list of text, list of label if training set otherwise None
 NishikaBoketeBatch = Tuple[
@@ -28,7 +28,7 @@ class NishikaBoketeDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         return len(self.ids)
 
-    def __getitem__(self, i: int) -> NishikaDataType:
+    def __getitem__(self, i: int) -> NishikaBoketeData:
         id_ = self.ids[i]
         image_filepath = os.path.join(self.image_dir, self.filenames[i])
         image = read_jpg(image_filepath)
@@ -47,7 +47,7 @@ def set_seeds(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-def collate_fn(batch: List[NishikaDataType]) -> NishikaBoketeBatch:
+def collate_fn(batch: List[NishikaBoketeData]) -> NishikaBoketeBatch:
     ids = []
     image_tensors = []
     texts = []
