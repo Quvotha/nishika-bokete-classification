@@ -1,4 +1,4 @@
-from typing import Literal, Sequence, Tuple
+from typing import Literal, Tuple
 
 from transformers import BertModel, GPT2Model, RobertaModel
 from transformers import AutoTokenizer, T5Tokenizer
@@ -51,13 +51,13 @@ class SequenceVectorizer(torch.nn.Module):
     def __init__(self, model_name: SequenceModelName):
         super(SequenceVectorizer, self).__init__()
         model, tokenizer = get_model_and_tokenizer(model_name)
-        self.tokenizer = tokenizer
+        self._tokenizer = tokenizer
         self.backbone = model
         self.model_name = model_name
 
-    def forward(self, sequence: str) -> torch.Tensor:
-        tokenized_sequence = self.tokenizer(sequence, return_tensors="pt", padding=True)
-        outputs = self.backbone(**tokenized_sequence)
+    def forward(self, tokenized) -> torch.Tensor:
+        # tokenized_sequence = self.tokenizer(sequence, return_tensors="pt", padding=True)
+        outputs = self.backbone(**tokenized)
         return outputs["last_hidden_state"][:, 0, :]
 
     @property
@@ -69,6 +69,10 @@ class SequenceVectorizer(torch.nn.Module):
             "cl-tohoku/bert-base-japanese-v2",
         ):
             return 768
+
+    @property
+    def tokenizer(self):
+        return self._tokenizer
 
 
 class SequenceClassifier(torch.nn.Module):
@@ -82,9 +86,13 @@ class SequenceClassifier(torch.nn.Module):
         self.model_name = model_name
         self.n_classes = n_classes
 
-    def forward(self, sequences: Sequence[str]) -> torch.Tensor:
-        vector = self.vectorizer(sequences)
+    def forward(self, tokenized) -> torch.Tensor:
+        vector = self.vectorizer(tokenized)
         return self.classifier(self.activation(vector))
+
+    @property
+    def tokenizer(self):
+        return self.vectorizer.tokenizer
 
 
 if __name__ == "__main__":
@@ -95,8 +103,10 @@ if __name__ == "__main__":
         "cl-tohoku/bert-base-japanese-v2",
     ]:
         vectorizer = SequenceVectorizer(m)
-        vector = vectorizer(texts)
+        tokenized = vectorizer.tokenizer(texts, return_tensors="pt", padding=True)
+        vector = vectorizer(tokenized)
         assert vector.shape[-1] == vectorizer.ndim, (vector.shape, vectorizer.ndim)
 
         classifier = SequenceClassifier(m)
-        prediction = classifier(texts)
+        tokenized = classifier.tokenizer(texts, return_tensors="pt", padding=True)
+        prediction = classifier(tokenized)
