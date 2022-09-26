@@ -62,3 +62,13 @@ def collate_fn(batch: List[NishikaBoketeData]) -> NishikaBoketeBatch:
         return ids, image_tensors, texts, labels
     else:
         return ids, image_tensors, texts, None
+
+
+def split_into_training_validation(
+    data: pd.DataFrame, cv: pd.DataFrame, oof_fold: int
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    oof_filenames = cv.query(f"oof_fold == {oof_fold}")["odai_photo_file_name"]
+    mask = data["odai_photo_file_name"].isin(oof_filenames)  # True: validation set
+    train = data.loc[~mask].copy()
+    valid = data.loc[mask].copy()
+    return train, valid
