@@ -1,6 +1,6 @@
 import argparse
 import os
-from typing import Tuple, Union
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,12 @@ from scripts.image_models import ImageClassifier, ImageModelName
 from scripts.log import get_logger
 from scripts.sequence_models import SequenceClassifier, SequenceModelName
 from scripts.texts import cleanse
-from scripts.utils import collate_fn, NishikaBoketeDataset, set_seeds
+from scripts.utils import (
+    collate_fn,
+    NishikaBoketeDataset,
+    set_seeds,
+    split_into_training_validation,
+)
 
 
 def _get_args() -> argparse.Namespace:
@@ -88,16 +93,6 @@ def _get_args() -> argparse.Namespace:
     )
     args = parser.parse_args()
     return args
-
-
-def split_into_training_validation(
-    data: pd.DataFrame, cv: pd.DataFrame, oof_fold: int
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    oof_filenames = cv.query(f"oof_fold == {oof_fold}")["odai_photo_file_name"]
-    mask = data["odai_photo_file_name"].isin(oof_filenames)  # True: validation set
-    train = data.loc[~mask].copy()
-    valid = data.loc[mask].copy()
-    return train, valid
 
 
 def main(
