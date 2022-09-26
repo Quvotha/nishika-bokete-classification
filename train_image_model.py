@@ -1,11 +1,15 @@
 import argparse
 import os
+from typing import Tuple, Union
 
+import numpy as np
 import pandas as pd
 import torch
 
-from scripts.image_models import ImageClassifier
+from scripts.image_models import ImageClassifier, ImageModelName
 from scripts.log import get_logger
+from scripts.sequence_models import SequenceClassifier, SequenceModelName
+from scripts.texts import cleanse
 from scripts.utils import collate_fn, NishikaBoketeDataset, set_seeds
 
 
@@ -77,12 +81,27 @@ def _get_args() -> argparse.Namespace:
         default=os.cpu_count(),
         help=f"Number of processes passed to pytorch's dataloader, by default {os.cpu_count()}.",
     )
+    parser.add_argument(
+        "--nlp",
+        action="store_true",
+        help="Train SequenceClassifier if True otherwise ImageClassifier.",
+    )
     args = parser.parse_args()
     return args
 
 
+def split_into_training_validation(
+    data: pd.DataFrame, cv: pd.DataFrame, oof_fold: int
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    oof_filenames = cv.query(f"oof_fold == {oof_fold}")["odai_photo_file_name"]
+    mask = data["odai_photo_file_name"].isin(oof_filenames)  # True: validation set
+    train = data.loc[~mask].copy()
+    valid = data.loc[mask].copy()
+    return train, valid
+
+
 def main(
-    model_name: str,
+    model_name: Union[ImageModelName, SequenceModelName],
     n_epochs: int,
     lr: float,
     batch_size: int,
@@ -94,6 +113,7 @@ def main(
     model_dir: str,
     seed: int,
     num_workers: int,
+    nlp: bool,
 ):
     # Validation
     assert (
@@ -119,8 +139,11 @@ def main(
     assert (
         0 <= num_workers <= os.cpu_count()
     ), f"`num_workers` is out of range ({num_workers}, {os.cpu_count()})"
-    # Prepare logger
-    logger = get_logger(os.path.join(log_dir, "train_image_model.log"), __name__)
+
+    # Get logger
+    logger = get_logger(os.path.join(log_dir, "train_model.log"), __name__)
+
+    # Debug
     logger.debug('model_name: "{}"'.format(model_name))
     logger.debug('n_epochs: "{}"'.format(n_epochs))
     logger.debug('lr: "{}"'.format(lr))
@@ -130,45 +153,61 @@ def main(
     logger.debug('image_dir: "{}"'.format(image_dir))
     logger.debug('log_dir: "{}"'.format(log_dir))
     logger.debug('model_dir: "{}"'.format(model_dir))
+    logger.debug('nlp = "{}"'.format(nlp))
 
     # Load dataset
     data = pd.read_csv(os.path.join(input_dir, "train.csv"))
     cv = pd.read_csv(cv_filepath)
 
+    # Preprocess text if neede
+    if nlp:
+        data["text"] = np.vectorize(cleanse)(data["text"])
+
     # Split data into training/validation set
-    oof_filenames = cv.query(f"oof_fold == {oof_fold}")["odai_photo_file_name"]
-    mask = data["odai_photo_file_name"].isin(oof_filenames)  # True: validation set
-    train = data.loc[~mask]
-    valid = data.loc[mask]
+    train, valid = split_into_training_validation(data, cv, oof_fold)
     logger.debug(
         "Training set: {} rows, Validation set: {} rows".format(
             train.shape[0], valid.shape[0]
         )
     )
-    assert min(train.shape[0], valid.shape[0]) > 0
+    assert (
+        min(train.shape[0], valid.shape[0]) > 0
+    ), f"At least one of training/validation set has not row {(train.shape[0], valid.shape[0], oof_fold)}"
+    del data, cv
 
-    # Prepare model output directory
-    model_output_dir = os.path.join(model_dir, model_name, f"fold{oof_fold}")
+    # Make model output directory
+    if nlp:
+        model_output_dir = os.path.join(
+            model_dir, model_name.replace("/", "-"), f"fold{oof_fold}"
+        )
+    else:
+        model_output_dir = os.path.join(model_dir, model_name, f"fold{oof_fold}")
     if not os.path.isdir(model_output_dir):
         logger.info('Make "{}" for saving model'.format(model_output_dir))
         os.makedirs(model_output_dir)
 
-    # Train and evaluate model
+    # Set seed for reproducibity
     set_seeds(seed)
+
+    # Select device
     device_name = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info("Train model on {}".format(device_name))
     device = torch.device(device_name)
-    model = ImageClassifier(model_name).to(device)
-    image_transforms = model.transforms
+
+    # Create model to be trained
+    if nlp:
+        model = SequenceClassifier(model_name).to(device)
+    else:
+        model = ImageClassifier(model_name).to(device)
+
+    # Prepare optimizer, scheduler, criterion and dataloaders
     optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0.01)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=n_epochs, eta_min=0, last_epoch=-1
     )
     criterion = torch.nn.BCEWithLogitsLoss()
-    dataset_train = NishikaBoketeDataset(train, image_dir)
-    dataset_valid = NishikaBoketeDataset(valid, image_dir)
     dataloader_train = torch.utils.data.DataLoader(
-        dataset_train,
+        NishikaBoketeDataset(train, image_dir),
         batch_size=batch_size,
         shuffle=True,
         drop_last=True,
@@ -176,33 +215,32 @@ def main(
         num_workers=num_workers,
     )
     dataloader_valid = torch.utils.data.DataLoader(
-        dataset_valid,
+        NishikaBoketeDataset(valid, image_dir),
         batch_size=batch_size,
         collate_fn=collate_fn,
         num_workers=num_workers,
     )
-    for epoch in range(1, n_epochs + 1):
+
+    # Run training/evaluation loop
+    for epoch in range(1, n_epochs + 1):  # 1 epoch
         logger.info("Start {}/{} epoch".format(epoch, n_epochs))
 
         # Training
         model.train()
         total_loss_train = 0.0
         n_train = 0
-        for batch in dataloader_train:
-            _, images, _, labels = batch
-            images_transformed = torch.stack(
-                [image_transforms(image) for image in images]
-            ).to(device)
-            # images = images.to(device)
+        for batch in dataloader_train:  # 1 batch (training set)
+            _, image_tensors, texts, labels = batch
             labels = torch.Tensor(labels).to(device)
             optimizer.zero_grad()
-            output = model(images_transformed)  # shape = (batch_size, 1)
+            input_ = model.preprocess(texts if nlp else image_tensors).to(device)
+            output = model(input_)
             loss = criterion(output[:, -1], labels)
             loss.backward()
             optimizer.step()
             total_loss_train += loss.item()
             n_train += len(output)
-            del images_transformed, output, labels, batch
+            del output, labels, batch, image_tensors, input_
             torch.cuda.empty_cache()
         scheduler.step()
 
@@ -216,20 +254,19 @@ def main(
         model.eval()
         total_loss_valid = 0.0
         n_valid = 0
-        for batch in dataloader_valid:
-            _, images, _, labels = batch
-            images_transformed = torch.stack(
-                [image_transforms(image) for image in images]
-            ).to(device)
-            # images = images.to(device)
+        for batch in dataloader_valid:  # 1 batch (validation set)
+            _, image_tensors, texts, labels = batch
             labels = torch.Tensor(labels).to(device)
+            input_ = model.preprocess(texts if nlp else image_tensors).to(device)
             with torch.inference_mode():
-                output = model(images_transformed)
+                output = model(input_)
             loss = criterion(output[:, -1], labels)
             total_loss_valid += loss.item()
             n_valid += len(output)
-            del images_transformed, output, labels, batch
+            del output, labels, batch, image_tensors, input_
             torch.cuda.empty_cache()
+
+        # Logging
         logger.info(
             "Epoch {}: Training loss = {} Validation loss = {}".format(
                 epoch, total_loss_train / n_train, total_loss_valid / n_valid
@@ -254,4 +291,5 @@ if __name__ == "__main__":
         args.model_dir,
         args.seed,
         args.num_workers,
+        args.nlp,
     )
