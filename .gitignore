@@ -132,3 +132,4 @@ dmypy.json
 log/
 data/
 models/
+notebooks/
