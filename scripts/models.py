@@ -2,8 +2,8 @@ from typing import Iterable, Tuple
 
 import torch
 
-from sequence_models import SequenceClassifier, SequenceModelName
-from image_models import ImageClassifier, ImageModelName
+from scripts.image_models import ImageClassifier, ImageModelName
+from scripts.sequence_models import SequenceClassifier, SequenceModelName
 
 
 class BoketeClassifier(torch.nn.Module):
@@ -57,6 +57,7 @@ class BoketeClassifier(torch.nn.Module):
 
 
 if __name__ == "__main__":
+
     texts = ["Nishikaボケて", "いろはにほへとちりぬるを", "仰げば尊し", "ゴンザレス井上"]
     image_tensors = torch.Tensor(size=(len(texts), 3, 224, 224))
 
