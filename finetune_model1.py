@@ -136,7 +136,7 @@ def main(
     ), f"`num_workers` is out of range ({num_workers}, {os.cpu_count()})"
 
     # Get logger
-    logger = get_logger(os.path.join(log_dir, "train_model.log"), __name__)
+    logger = get_logger(os.path.join(log_dir, "finetune_model1.log"), __name__)
 
     # Debug
     logger.debug('model_name: "{}"'.format(model_name))

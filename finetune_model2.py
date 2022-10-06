@@ -166,7 +166,7 @@ def main(
     ), f"{sequence_model_weight} should be blank str or filepath of pretrained model"
 
     # Get logger
-    logger = get_logger(os.path.join(log_dir, "train_model.log"), __name__)
+    logger = get_logger(os.path.join(log_dir, "finetune_model2.log"), __name__)
 
     # Debug
     logger.debug('image_model_name: "{}"'.format(image_model_name))
