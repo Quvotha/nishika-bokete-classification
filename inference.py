@@ -41,7 +41,7 @@ def _get_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "-is",
-        "--sample_submission",
+        "--sample_submission_filepath",
         type=str,
         default="",
         help="Filepath to submission format.",
