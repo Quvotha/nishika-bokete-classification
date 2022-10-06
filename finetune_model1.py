@@ -197,9 +197,9 @@ def main(
 
     # Prepare optimizer, scheduler, criterion and dataloaders
     optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0.01)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=n_epochs, eta_min=0, last_epoch=-1
-    )
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    #     optimizer, T_max=n_epochs, eta_min=0, last_epoch=-1
+    # )
     criterion = torch.nn.BCEWithLogitsLoss()
     dataloader_train = torch.utils.data.DataLoader(
         NishikaBoketeDataset(train, image_dir),
@@ -237,7 +237,7 @@ def main(
             n_train += len(output)
             del output, labels, batch, image_tensors, input_
             torch.cuda.empty_cache()
-        scheduler.step()
+        # scheduler.step()
 
         # Save model
         torch.save(
