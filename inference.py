@@ -10,12 +10,7 @@ from scripts.log import get_logger
 from scripts.models import BoketeClassifier
 from scripts.sequence_models import SequenceClassifier, SequenceModelName
 from scripts.texts import cleanse
-from scripts.utils import (
-    collate_fn,
-    NishikaBoketeDataset,
-    set_seeds,
-    split_into_training_validation,
-)
+from scripts.utils import collate_fn, NishikaBoketeDataset, set_seeds
 
 
 def _get_args() -> argparse.Namespace:
@@ -44,6 +39,13 @@ def _get_args() -> argparse.Namespace:
         type=str,
         default=input_filepath_default,
         help=f'Input filepath, by default "{input_filepath_default}".',
+    )
+    parser.add_argument(
+        "-is",
+        "--sample_submission",
+        type=str,
+        default="",
+        help="Filepath to submission format.",
     )
     parser.add_argument(
         "-im",
@@ -85,16 +87,24 @@ def main(
     image_model_weight: str,
     sequence_model_weight: str,
     batch_size: int,
+    sample_submission_filepath: str,
     image_dir: str,
     log_dir: str,
     seed: int,
     num_workers: int,
 ):
     # Validation
+    assert os.path.isfile(input_filepath), f'"{input_filepath}" dose not exist'
+    assert os.path.isfile(image_model_weight), f'"{image_model_weight}" dose not exist'
+    assert os.path.isfile(
+        sequence_model_weight
+    ), f'"{sequence_model_weight}" dose not exist'
     assert (
         isinstance(batch_size, int) and batch_size > 0
     ), f"`batch_size` should be positive interger but {batch_size} was given"
-    assert os.path.isfile(input_filepath), f'"{input_filepath}" dose not exist'
+    assert not (sample_submission_filepath) or os.path.isfile(
+        sample_submission_filepath
+    ), f"`sample_submission_filepath` should be blank or existing filepath but {sample_submission_filepath} was given"
     assert os.path.isdir(image_dir), f'"{image_dir}" dose not exist'
     assert os.path.isdir(log_dir), f'"{log_dir}" dose not exist'
     assert (
@@ -103,10 +113,6 @@ def main(
     assert (
         0 <= num_workers <= os.cpu_count()
     ), f"`num_workers` is out of range ({num_workers}, {os.cpu_count()})"
-    assert os.path.isfile(image_model_weight), f'"{image_model_weight}" dose not exist'
-    assert os.path.isfile(
-        sequence_model_weight
-    ), f'"{sequence_model_weight}" dose not exist'
 
     # Get logger
     logger = get_logger(os.path.join(log_dir, "inference.log"), __name__)
@@ -119,6 +125,7 @@ def main(
     logger.debug('image_model_weight: "{}"'.format(image_model_weight))
     logger.debug('sequence_model_weight: "{}"'.format(sequence_model_weight))
     logger.debug('batch_size: "{}"'.format(batch_size))
+    logger.debug('sample_submission_filepath: "{}"'.format(sample_submission_filepath))
     logger.debug('image_dir: "{}"'.format(image_dir))
     logger.debug('seed: "{}"'.format(seed))
     logger.debug('num_workers: "{}"'.format(num_workers))
@@ -134,20 +141,23 @@ def main(
 
     # Select device
     device_name = "cuda" if torch.cuda.is_available() else "cpu"
-    logger.info("Train model on {}".format(device_name))
+    logger.info("Do inference on {}".format(device_name))
     device = torch.device(device_name)
 
-    # Create model to be trained, use pretrained image/sequence model's weight if filepath is given
+    # Load classification model and finetuned weight
     model = BoketeClassifier(image_model_name, sequence_model_name)
     image_model = ImageClassifier(image_model_name)
     image_model.load_state_dict(torch.load(image_model_weight))
     model.image_vectorizer.load_state_dict(image_model.vectorizer.state_dict().copy())
+    del image_model
     sequence_model = SequenceClassifier(sequence_model_name)
     sequence_model.load_state_dict(torch.load(sequence_model_weight))
     model.sequence_vectorizer.load_state_dict(
         sequence_model.vectorizer.state_dict().copy()
     )
-    del image_model, sequence_model
+    del sequence_model
+
+    # Inference loop
     model.to(device)
     model.eval()
     dataloader = torch.utils.data.DataLoader(
@@ -162,13 +172,26 @@ def main(
     prediction = []
     for batch in dataloader:
         ids_, image_tensors, texts, _ = batch
-        images_transformed, tokenized = model.preprocess(image_tensors, texts)
-        output = model(images_transformed.to(device), tokenized.to(device))
+        with torch.inference_mode():
+            images_transformed, tokenized = model.preprocess(image_tensors, texts)
+            output = model(images_transformed.to(device), tokenized.to(device))
         ids += ids_
         prediction.append(output.sigmoid().detach().to("cpu").numpy())
         del image_tensors, images_transformed, tokenized
-    result = pd.DataFrame(data=np.vstack(prediction), index=ids)
-    result.to_csv(output_filepath)
+    del model
+    result = pd.DataFrame(data=np.vstack(prediction), index=ids, columns=["is_laugh"])
+
+    # Merge inference to submission format if format filepath is set
+    if sample_submission_filepath:
+        sample_submission = pd.read_csv(
+            sample_submission_filepath, usecols=["id"]
+        ).set_index("id")
+        sample_submission["is_laugh"] = result.loc[
+            sample_submission.index, "is_laugh"
+        ].to_numpy()
+        sample_submission.to_csv(output_filepath)
+    else:
+        result.to_csv(output_filepath)
 
     logger.info("Complete")
 
@@ -176,21 +199,16 @@ def main(
 if __name__ == "__main__":
     args = _get_args()
     main(
+        args.input_filepath,
+        args.output_filepath,
         args.image_model_name,
         args.sequence_model_name,
-        args.n_epochs,
-        args.lr,
-        args.batch_size,
-        args.oof_fold,
-        args.cv_filepath,
-        args.input_dir,
-        args.image_dir,
-        args.log_dir,
-        args.model_dir,
-        args.seed,
-        args.num_workers,
         args.image_model_weight,
         args.sequence_model_weight,
-        args.freeze_image_vectorizer,
-        args.freeze_sequence_vectorizer,
+        args.batch_size,
+        args.sample_submission_filepath,
+        args.image_dir,
+        args.log_dir,
+        args.seed,
+        args.num_workers,
     )
