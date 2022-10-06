@@ -30,8 +30,7 @@ def _get_args() -> argparse.Namespace:
     )
     parser.add_argument("image_model_name", type=str, help="Image model name.")
     parser.add_argument("sequence_model_name", type=str, help="Sequence model name.")
-    parser.add_argument("image_model_weight", type=str)
-    parser.add_argument("sequemce_model_weight", type=str)
+    parser.add_argument("model_weight", type=str)
     parser.add_argument("batch_size", type=int, help="Batch size.")
     parser.add_argument(
         "-i",
@@ -84,8 +83,7 @@ def main(
     output_filepath: str,
     image_model_name: ImageModelName,
     sequence_model_name: SequenceModelName,
-    image_model_weight: str,
-    sequence_model_weight: str,
+    model_weight: str,
     batch_size: int,
     sample_submission_filepath: str,
     image_dir: str,
@@ -95,10 +93,7 @@ def main(
 ):
     # Validation
     assert os.path.isfile(input_filepath), f'"{input_filepath}" dose not exist'
-    assert os.path.isfile(image_model_weight), f'"{image_model_weight}" dose not exist'
-    assert os.path.isfile(
-        sequence_model_weight
-    ), f'"{sequence_model_weight}" dose not exist'
+    assert os.path.isfile(model_weight), f'"{model_weight}" dose not exist'
     assert (
         isinstance(batch_size, int) and batch_size > 0
     ), f"`batch_size` should be positive interger but {batch_size} was given"
@@ -122,8 +117,7 @@ def main(
     logger.debug('output_filepath: "{}"'.format(output_filepath))
     logger.debug('image_model_name: "{}"'.format(image_model_name))
     logger.debug('sequence_model_name: "{}"'.format(sequence_model_name))
-    logger.debug('image_model_weight: "{}"'.format(image_model_weight))
-    logger.debug('sequence_model_weight: "{}"'.format(sequence_model_weight))
+    logger.debug('model_weight: "{}"'.format(model_weight))
     logger.debug('batch_size: "{}"'.format(batch_size))
     logger.debug('sample_submission_filepath: "{}"'.format(sample_submission_filepath))
     logger.debug('image_dir: "{}"'.format(image_dir))
@@ -146,19 +140,10 @@ def main(
 
     # Load classification model and finetuned weight
     model = BoketeClassifier(image_model_name, sequence_model_name)
-    image_model = ImageClassifier(image_model_name)
-    image_model.load_state_dict(torch.load(image_model_weight))
-    model.image_vectorizer.load_state_dict(image_model.vectorizer.state_dict().copy())
-    del image_model
-    sequence_model = SequenceClassifier(sequence_model_name)
-    sequence_model.load_state_dict(torch.load(sequence_model_weight))
-    model.sequence_vectorizer.load_state_dict(
-        sequence_model.vectorizer.state_dict().copy()
-    )
-    del sequence_model
+    model.load_state_dict(torch.load(model_weight))
+    model.to(device)
 
     # Inference loop
-    model.to(device)
     model.eval()
     dataloader = torch.utils.data.DataLoader(
         NishikaBoketeDataset(data, image_dir),
@@ -203,8 +188,7 @@ if __name__ == "__main__":
         args.output_filepath,
         args.image_model_name,
         args.sequence_model_name,
-        args.image_model_weight,
-        args.sequence_model_weight,
+        args.model_weight,
         args.batch_size,
         args.sample_submission_filepath,
         args.image_dir,
