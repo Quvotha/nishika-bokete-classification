@@ -229,7 +229,7 @@ def main(
             'Load pretrained image model weight from "{}"'.format(image_model_weight)
         )
         image_model = ImageClassifier(image_model_name)
-        image_model.load_state_dict(torch.load(image_model_weight))
+        image_model.load_state_dict(torch.load(image_model_weight, map_location=device))
         model.image_vectorizer.load_state_dict(
             image_model.vectorizer.state_dict().copy()
         )
@@ -242,7 +242,9 @@ def main(
             )
         )
         sequence_model = SequenceClassifier(sequence_model_name)
-        sequence_model.load_state_dict(torch.load(sequence_model_weight))
+        sequence_model.load_state_dict(
+            torch.load(sequence_model_weight, map_location=device)
+        )
         model.sequence_vectorizer.load_state_dict(
             sequence_model.vectorizer.state_dict().copy()
         )

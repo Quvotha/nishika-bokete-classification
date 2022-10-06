@@ -140,7 +140,7 @@ def main(
 
     # Load classification model and finetuned weight
     model = BoketeClassifier(image_model_name, sequence_model_name)
-    model.load_state_dict(torch.load(model_weight))
+    model.load_state_dict(torch.load(model_weight, map_location=device))
     model.to(device)
 
     # Inference loop
